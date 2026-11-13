@@ -1,18 +1,22 @@
-# Urban Company Native M2 Smart Water Purifier Monitor & Home Assistant Integration
+# Unofficial Native M2 Smart Water Purifier Monitor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-REST%20Sensor-blue.svg)](https://www.home-assistant.io/)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-brightgreen.svg)](https://www.python.org/)
-[![Tested Device](https://img.shields.io/badge/Tested%20Device-Native%20M2%20(Confirmed%20Nov%202026)-success.svg)](https://www.urbancompany.com/)
+[![Status](https://img.shields.io/badge/Status-Personal%20Research%20POC-orange.svg)](https://opensource.org/)
 
-An unofficial, complete Python client and **Home Assistant integration** for the **Urban Company Native M2 Smart RO Water Purifier**. 
+An unofficial Python client and **Home Assistant integration** developed strictly for **personal home automation, protocol research, and device interoperability** with the Native M2 Smart RO Water Purifier.
 
-Extracts **real-time output TDS (ppm)**, online/offline status, filter life remaining, warranty status, and daily water consumption history.
+> [!CAUTION]
+> ### Important Legal Disclaimer & Trademark Notice
+> * **No Affiliation or Endorsement:** This repository is an independent personal project. It is **not** affiliated with, sponsored by, authorized by, or endorsed by Urban Company (UrbanClap Technologies India Pvt. Ltd.) or IoTfy Solutions Pvt. Ltd.
+> * **Nominative Trademark Use:** "Urban Company", "UrbanClap", "Native", "Native M2", and related marks are trademarks of their respective owners. Their mention here is strictly for descriptive and nominative identification purposes to establish device compatibility under fair use.
+> * **Private / Undocumented APIs:** The endpoints described in this repository are private, internal service endpoints. They are unsupported, unversioned, and subject to change, breaking modifications, or access restrictions at any time without notice.
+> * **Personal Use & Scope:** This code is shared as an educational research artifact and personal interoperability tool. It is provided "as is" with no guarantees of fitness, ongoing availability, or support. Use responsibly at your own discretion.
 
-> [!IMPORTANT]
-> **Compatibility Status:**  
-> **Tested and confirmed working on the Urban Company Native M2** (November 2026).  
-> Other models (Native M1, Native M2 Pro, Native M3, Native M3 Pro) share the same underlying IoTfy cloud architecture, but have not been independently tested. Contributions and compatibility reports for other models are welcome!
+> [!NOTE]
+> **Compatibility Scope:**  
+> Tested on a single personal **Native M2** unit as of November 2026. Other models have not been verified.
 
 ---
 
@@ -291,8 +295,21 @@ To renew: open `urbancompany.com`, press `F12`, log in via OTP, and copy the new
 
 ---
 
-## Legal Disclaimer & License
+## Legal Disclaimer & Responsible Use
 
-This is an independent, community-driven open-source project created strictly for personal home automation and interoperability. It is not affiliated with, endorsed by, or sponsored by Urban Company (UrbanClap Technologies Pvt. Ltd.). All product names, trademarks, and registered trademarks belong to their respective holders.
+### 1. Trademark Non-Affiliation
+This repository is an independent research project and is **not affiliated with, authorized, maintained, or endorsed by Urban Company (UrbanClap Technologies India Pvt. Ltd.)**, IoTfy Solutions Pvt. Ltd., or any of their affiliates. The names "Urban Company", "UrbanClap", "Native", and "IoTfy" are used exclusively for nominative identification and interoperability descriptions under fair use principles.
+
+### 2. Terms of Service & API Considerations
+* The endpoints utilized in this project are undocumented, private APIs. They are subject to change, rate-limiting, or revocation by the service operator at any time without prior notice.
+* This tool is intended solely for personal, private automation and educational protocol research on appliances you legally own.
+* **Responsible Polling:** Always maintain a conservative polling interval (e.g., 5 to 10 minutes or longer). Do not perform high-frequency polling, scraping, or automated stress-testing against third-party backends.
+
+### 3. Limitation of Liability
+The software is provided "AS IS", without warranty of any kind, express or implied. Under no circumstances shall the authors or copyright holders be liable for any claim, damages, service interruption, account restriction, or hardware malfunction arising from the use of this software.
+
+---
+
+## License
 
 Distributed under the [MIT License](LICENSE).
