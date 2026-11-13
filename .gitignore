@@ -1,0 +1,19 @@
+# Local configuration containing personal tokens & device IDs
+config.json
+
+# Environment variables
+.env
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Packet captures & logs
+*.pcap
+*.pcapng
+*.log
+
+# Operating system artifacts
+.DS_Store
+Thumbs.db

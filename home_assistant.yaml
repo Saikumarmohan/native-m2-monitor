@@ -1,0 +1,41 @@
+# ==============================================================================
+# Home Assistant REST Sensors for Urban Company Native M2 / M1 / M3 Purifier
+# ==============================================================================
+# Add this block to your Home Assistant configuration.yaml
+# Replace YOUR_BEARER_TOKEN and YOUR_APPLIANCE_ID with your credentials.
+
+rest:
+  - resource: https://www.urbanclap.com/api/v2/growth/appliances/getDetailsScreen
+    method: POST
+    scan_interval: 300 # Poll every 5 minutes (300 seconds)
+    headers:
+      Authorization: "Bearer YOUR_BEARER_TOKEN"
+      x-device-id: "YOUR_DEVICE_ID"
+      x-device-os: "web"
+      Content-Type: "application/json"
+      x-brand-key: "urbanCompany"
+      x-version-code: "4.273.58"
+      User-Agent: "HomeAssistant/NativeM2"
+    payload: '{"city_key":null,"applianceId":"YOUR_APPLIANCE_ID"}'
+    sensor:
+      - name: "Purifier TDS"
+        unique_id: native_m2_tds
+        value_template: "{{ value_json.success.data.dataStore.bigMetricHeader.metricData.metricKeyText.textValue | int }}"
+        unit_of_measurement: "ppm"
+        state_class: measurement
+        icon: mdi:water-check
+
+      - name: "Purifier Status"
+        unique_id: native_m2_status
+        value_template: "{{ value_json.success.data.dataStore.header.badgeStack.tags[0].text }}"
+        icon: mdi:power
+
+      - name: "Purifier Filter Status"
+        unique_id: native_m2_filter_status
+        value_template: "{{ value_json.success.data.dataStore.filterDetailsCard.items[1].data.adsTextStack.items[0].data.text }}"
+        icon: mdi:filter-cog
+
+      - name: "Purifier Warranty Status"
+        unique_id: native_m2_warranty_status
+        value_template: "{{ value_json.success.data.dataStore.warrantyCard.items[0].data.adsTextStack.items[0].data.tags[0].text }}"
+        icon: mdi:shield-alert

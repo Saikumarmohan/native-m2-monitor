@@ -1,0 +1,8 @@
+{
+  "appliance_id": "YOUR_APPLIANCE_ID_HERE",
+  "authorization": "Bearer YOUR_BEARER_TOKEN_HERE",
+  "device_id": "YOUR_DEVICE_ID_HERE",
+  "brand_key": "urbanCompany",
+  "version_code": "4.273.58",
+  "device_os": "web"
+}
