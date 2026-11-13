@@ -9,8 +9,11 @@ An unofficial Python client and **Home Assistant integration** developed strictl
 
 > [!CAUTION]
 > ### Important Legal Disclaimer & Trademark Notice
+> **"Unofficial project, not affiliated with Urban Company; may conflict with their ToS and handles sensitive tokens—use at your own risk."**
+> 
 > * **No Affiliation or Endorsement:** This repository is an independent personal project. It is **not** affiliated with, sponsored by, authorized by, or endorsed by Urban Company (UrbanClap Technologies India Pvt. Ltd.) or IoTfy Solutions Pvt. Ltd.
 > * **Nominative Trademark Use:** "Urban Company", "UrbanClap", "Native", "Native M2", and related marks are trademarks of their respective owners. Their mention here is strictly for descriptive and nominative identification purposes to establish device compatibility under fair use.
+> * **Terms of Service & Token Sensitivity:** This project uses undocumented internal APIs and handles personal bearer tokens. It is an experimental proof-of-concept for personal interoperability and may conflict with provider Terms of Service.
 > * **Private / Undocumented APIs:** The endpoints described in this repository are private, internal service endpoints. They are unsupported, unversioned, and subject to change, breaking modifications, or access restrictions at any time without notice.
 > * **Personal Use & Scope:** This code is shared as an educational research artifact and personal interoperability tool. It is provided "as is" with no guarantees of fitness, ongoing availability, or support. Use responsibly at your own discretion.
 
