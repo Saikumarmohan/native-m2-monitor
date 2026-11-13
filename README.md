@@ -1,78 +1,165 @@
-# Urban Company Native M2 Smart Water Purifier Monitor
+# Urban Company Native M2 Smart Water Purifier Monitor & Home Assistant Integration
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-REST%20Sensor-blue.svg)](https://www.home-assistant.io/)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-brightgreen.svg)](https://www.python.org/)
-[![Tested Device](https://img.shields.io/badge/Tested%20On-Native%20M2%20(Nov%202026)-success.svg)](https://www.urbancompany.com/)
+[![Tested Device](https://img.shields.io/badge/Tested%20Device-Native%20M2%20(Confirmed%20Nov%202026)-success.svg)](https://www.urbancompany.com/)
 
-An unofficial Python client and **Home Assistant integration** for the **Urban Company Native M2 Smart RO Water Purifier**.
+An unofficial, complete Python client and **Home Assistant integration** for the **Urban Company Native M2 Smart RO Water Purifier**. 
 
-Tracks **real-time output TDS (ppm)**, online/offline status, filter life remaining, warranty status, and daily water consumption without hardware modifications.
+Extracts **real-time output TDS (ppm)**, online/offline status, filter life remaining, warranty status, and daily water consumption history.
 
-> **Compatibility Notice:**  
-> **Tested and confirmed working as of November 2026 on the Urban Company Native M2**.  
-> Other models (Native M1, M2 Pro, M3) likely share the same IoTfy/Urban Company API structure, but have not been independently verified. If you test on other models, please feel free to open an issue or pull request!
-
----
-
-## The Backstory
-
-Many owners of the Urban Company Native water purifiers have wanted to integrate real-time TDS and water metrics into Home Assistant or personal dashboards. However, the manufacturer does not expose any local dashboard, local API, or open MQTT broker.
-
-This repository provides a clean, working solution and documents the underlying hardware and network findings so others (and AI coding assistants) don't have to waste time exploring dead ends.
+> [!IMPORTANT]
+> **Compatibility Status:**  
+> **Tested and confirmed working on the Urban Company Native M2** (November 2026).  
+> Other models (Native M1, Native M2 Pro, Native M3, Native M3 Pro) share the same underlying IoTfy cloud architecture, but have not been independently tested. Contributions and compatibility reports for other models are welcome!
 
 ---
 
-## How to Get Your Credentials (30-Second Desktop Browser Method)
+## Table of Contents
+- [Architecture Overview](#architecture-overview)
+- [How It Works (For Humans & AI Agents)](#how-it-works-for-humans--ai-agents)
+- [Reverse-Engineering & Hardware Findings](#reverse-engineering--hardware-findings)
+  - [Hardware Specs](#1-hardware-specifications)
+  - [Network & Protocol Analysis](#2-network--protocol-analysis)
+  - [Why Direct Local Connection Fails (Dead Ends Analyzed)](#3-why-direct-local-connection-fails-dead-ends-analyzed)
+- [Quick Start Guide](#quick-start-guide)
+  - [1. 30-Second Token Capture (Desktop Browser)](#step-1-capture-your-credentials-desktop-browser-method)
+  - [2. Configuration](#step-2-configure-credentials)
+  - [3. Run the CLI Monitor](#step-3-run-the-cli-monitor)
+- [Home Assistant Integration](#home-assistant-integration)
+  - [Sensor Configuration (`configuration.yaml`)](#home-assistant-configurationyaml)
+  - [Lovelace Dashboard Card Example](#sample-lovelace-dashboard-card)
+- [API Reference](#api-reference)
+- [Troubleshooting & Token Renewal](#troubleshooting--token-renewal)
+- [Legal Disclaimer & License](#legal-disclaimer--license)
 
-**You do NOT need `mitmproxy` or special certificates.** You can grab your token directly using your desktop web browser (Brave, Chrome, Edge, or Firefox):
+---
 
-1. On your computer, open **[https://www.urbancompany.com](https://www.urbancompany.com/)**.
-2. Press **`F12`** (or right-click > *Inspect*) to open Developer Tools, and switch to the **Network** tab.
-3. In the filter box at the top, select **`Fetch/XHR`**.
-4. Log into Urban Company on the website using your mobile number and SMS OTP.
-5. In the Network tab, click on any recent request (e.g., `getDiscoveryScreenData`, `getDetailsScreen`, or any API call).
-6. Under the **Headers** tab, scroll to **Request Headers**:
-   - Copy the value of **`authorization`** (e.g., `Bearer 9RjErhLBBLHoaZqHp...`).
-   - Copy the value of **`x-device-id`** (e.g., `v-1794569622`).
+## Architecture Overview
+
+```mermaid
+flowchart TD
+    subgraph Hardware ["Native M2 Purifier (Inside Your Home)"]
+        Sensors["TDS Probe + Flow Meter"] --> ESP8266["Espressif ESP8266<br>(IoTfy SDK v10)"]
+    end
+
+    subgraph ManufacturerCloud ["Manufacturer Cloud Infrastructure"]
+        TimeServer["iace.iotfy.com<br>(HTTP Port 80 Clock Sync)"]
+        AWSIoT["AWS IoT Core (Mumbai)<br>a3814bo3dsv6qh-ats.iot.ap-south-1.amazonaws.com:8883<br>(Mutual TLS / mTLS)"]
+        UCBackend["Urban Company Backend<br>api.urbanclap.com/api/v2/..."]
+    end
+
+    subgraph UserInterface ["Your Monitoring Clients"]
+        CLI["Python CLI<br>(get_status.py)"]
+        HA["Home Assistant<br>(REST Sensors)"]
+    end
+
+    ESP8266 -- "1. HTTP getTimeMs" --> TimeServer
+    ESP8266 -- "2. MQTTS (mTLS Encrypted)" --> AWSIoT
+    AWSIoT <--> UCBackend
+    UserInterface -- "3. HTTPS REST (Bearer Auth)" --> UCBackend
+```
+
+---
+
+## How It Works (For Humans & AI Agents)
+
+Instead of intercepting encrypted hardware packets or opening the appliance casing, this integration interfaces directly with Urban Company's micro-frontend API endpoint:
+
+1. **Authentication:** Uses a standard long-lived **Bearer session token** obtained from logging into your Urban Company account.
+2. **Details Endpoint:** Queries `POST /api/v2/growth/appliances/getDetailsScreen` to get the digital twin state (live output TDS, online state, filter life, warranty).
+3. **Consumption Endpoint:** Queries `POST /api/v2/supply/appliances/getWaterConsumptionData` to get daily water dispensing volume history.
+4. **Execution:** Runs via a lightweight standard Python script (`native_m2.py`) or as native Home Assistant REST sensors with zero external daemon dependencies.
+
+---
+
+## Reverse-Engineering & Hardware Findings
+
+*(Documented to save other developers and AI assistants from repeating packet-sniffing experiments)*
+
+During network packet analysis (capturing through an isolated 2.4 GHz Access Point with `tcpdump` and Wireshark), we determined the complete internal hardware and protocol stack:
+
+### 1. Hardware Specifications
+* **Microcontroller:** **Espressif ESP8266** running the **IoTfy Embedded C++ SDK (v10)**.
+* **User-Agent:** `ESP8266HTTPClient`.
+* **MAC Address OUI:** `34:AB:95:xx:xx:xx` (Espressif Systems).
+* **Wi-Fi Radio:** Strictly **2.4 GHz** (802.11b/g/n, channels 1–11). The hardware does not contain a 5 GHz antenna.
+
+### 2. Network & Protocol Analysis
+When the purifier boots up:
+1. **Clock Sync:** Sends an unencrypted HTTP GET request to `http://iace.iotfy.com/t/getTimeMs` on port 80 (hosted on Google App Engine) with headers `ESP-MAC-ADDR` and `X-IOTFY-LIB-VERSION: 10` to sync system epoch time.
+2. **Cloud Broker Handshake:** Opens a TCP connection on port **8883 (MQTTS)** to `a3814bo3dsv6qh-ats.iot.ap-south-1.amazonaws.com` (AWS IoT Core in Mumbai).
+3. **Mutual TLS (mTLS):** The ESP8266 and AWS IoT perform mutual authentication. The device presents an internal client certificate:
+   - **Issuer:** `Amazon Web Services (AWS IoT Certificate)`
+   - **Validity:** Valid through year 2049.
+4. **Encrypted Telemetry:** All sensor telemetry (TDS, flow pulses, keepalives) is transmitted inside encrypted TLS Application Data packets.
+
+### 3. Why Direct Local Connection Fails (Dead Ends Analyzed)
+
+| Approach Attempted | What Happens | Why It Fails |
+|---|---|---|
+| **Direct IP Query (`http://192.168.x.x`)** | Connection refused / timed out | **No open listening ports.** The ESP8266 does not run an HTTP or local web server to save RAM. All connections are outbound. |
+| **Rogue Hotspot / DNS Spoofing** | Purifier disconnects and retries | **Strict mTLS.** The ESP8266 hardcodes Amazon's Root CA and sends a client certificate. Local brokers (Mosquitto) fail the TLS handshake. |
+| **Android App Proxying (`mitmproxy`)** | `Client TLS handshake failed` | **Android 7+ Security.** Android blocks user-installed CA certificates inside apps unless the app is modified or phone is rooted. |
+| **Desktop Web API (Working)** | **HTTP 200 OK** | **Bypasses all hurdles.** Provides clean JSON telemetry with zero hardware tampering or voided warranties. |
+
+---
+
+## Quick Start Guide
+
+### Step 1: Capture Your Credentials (Desktop Browser Method)
+
+> [!TIP]
+> **No proxy, mobile phone setup, or root certificates required.**
+
+1. On your computer, open **[https://www.urbancompany.com](https://www.urbancompany.com/)** in any browser (Brave, Chrome, Edge, Firefox).
+2. Press **`F12`** (or right-click > **Inspect**) and go to the **Network** tab.
+3. In the filter box, select **`Fetch/XHR`**.
+4. Log into Urban Company using your mobile phone number and SMS OTP.
+5. In the Network tab list, click on any recent request (e.g., `getDiscoveryScreenData` or `getDetailsScreen`).
+6. In the **Headers** tab, scroll to **Request Headers**:
+   - Copy **`authorization`** (e.g., `Bearer 9RjErhLBBLHoaZq...`).
+   - Copy **`x-device-id`** (e.g., `v-1794569622`).
 7. To find your **`applianceId`**:
-   - In the Network search (Ctrl+F inside DevTools), search for `applianceId`.
-   - Or open your purifier details and look for the payload sent to `/getDetailsScreen`.
-8. Paste these into `config.json` (see Quick Start below).
+   - In DevTools, press `Ctrl+F` and search for `applianceId`.
+   - Or click on your purifier in the browser and inspect the payload sent to `/getDetailsScreen`.
 
 ---
 
-## Quick Start (Python CLI)
+### Step 2: Configure Credentials
 
-### 1. Clone the repository
-```bash
-git clone https://github.com/YOUR_USERNAME/native-m2-monitor.git
-cd native-m2-monitor
-```
+1. Clone or download this repository:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/native-m2-monitor.git
+   cd native-m2-monitor
+   ```
+2. Copy the template:
+   ```bash
+   cp config.example.json config.json
+   ```
+3. Edit `config.json` with your captured credentials:
+   ```json
+   {
+     "appliance_id": "67245f04f6203600xxxxxxxx",
+     "authorization": "Bearer 9RjErhLBBLHoaZqHp0EApwau0tcj1XBa2arEfkCZXuQ=",
+     "device_id": "v-1794569622",
+     "brand_key": "urbanCompany",
+     "version_code": "4.273.58",
+     "device_os": "desktop_web"
+   }
+   ```
 
-### 2. Configure credentials
-Copy the example configuration:
-```bash
-cp config.example.json config.json
-```
-Edit `config.json` with your captured credentials:
-```json
-{
-  "appliance_id": "67245f04f6203600xxxxxxxx",
-  "authorization": "Bearer 9RjErhLBBLHoaZqHp0EApwau0tcj1XBa2arEfkCZXuQ=",
-  "device_id": "v-1794569622",
-  "brand_key": "urbanCompany",
-  "version_code": "4.273.58",
-  "device_os": "desktop_web"
-}
-```
+---
 
-### 3. Run the status monitor
+### Step 3: Run the CLI Monitor
+
+Execute the monitor script:
 ```bash
 python get_status.py
 ```
 
-Sample output:
+Output:
 ```text
 ====================================================
   Native M2 SMART WATER PURIFIER MONITOR
@@ -100,22 +187,24 @@ Sample output:
 
 ## Home Assistant Integration
 
-Add the sensors to your Home Assistant `configuration.yaml`:
+### `configuration.yaml`
+
+Add the following to your Home Assistant `configuration.yaml`. Replace `YOUR_BEARER_TOKEN` and `YOUR_APPLIANCE_ID` with your values:
 
 ```yaml
 rest:
   - resource: https://www.urbanclap.com/api/v2/growth/appliances/getDetailsScreen
     method: POST
-    scan_interval: 300 # Poll every 5 minutes (300s)
+    scan_interval: 300 # Poll every 5 minutes (300 seconds)
     headers:
-      Authorization: "Bearer YOUR_BEARER_TOKEN_HERE"
-      x-device-id: "YOUR_DEVICE_ID"
+      Authorization: "Bearer YOUR_BEARER_TOKEN"
+      x-device-id: "v-1794569622"
       x-device-os: "desktop_web"
       Content-Type: "application/json"
       x-brand-key: "urbanCompany"
       x-version-code: "4.273.58"
       User-Agent: "HomeAssistant/NativeM2"
-    payload: '{"city_key":null,"applianceId":"YOUR_APPLIANCE_ID_HERE"}'
+    payload: '{"city_key":null,"applianceId":"YOUR_APPLIANCE_ID"}'
     sensor:
       - name: "Purifier TDS"
         unique_id: native_m2_tds
@@ -140,39 +229,70 @@ rest:
         icon: mdi:shield-alert
 ```
 
+### Sample Lovelace Dashboard Card
+
+```yaml
+type: vertical-stack
+cards:
+  - type: gauge
+    entity: sensor.purifier_tds
+    min: 0
+    max: 300
+    name: Purifier TDS
+    severity:
+      green: 0
+      yellow: 100
+      red: 150
+  - type: entities
+    entities:
+      - entity: sensor.purifier_status
+        name: Online Status
+      - entity: sensor.purifier_filter_status
+        name: Filter Status
+      - entity: sensor.purifier_warranty_status
+        name: Warranty
+```
+
 ---
 
-## Hardware & Network Reverse-Engineering Findings
+## API Reference
 
-*(Why connecting directly to the purifier's local IP or setting up a rogue hotspot does not work)*
+### 1. Appliance Details & Live TDS
+* **URL:** `POST https://www.urbanclap.com/api/v2/growth/appliances/getDetailsScreen`
+* **Payload:** `{"city_key": null, "applianceId": "<id>"}`
+* **Key Response Paths:**
+  - `success.data.dataStore.bigMetricHeader.metricData.metricKeyText.textValue` -> Live TDS (e.g. `"79"`)
+  - `success.data.dataStore.bigMetricHeader.metricData.supScriptText.textValue` -> Unit (`"ppm"`)
+  - `success.data.dataStore.bigMetricHeader.metricData.badge.text` -> Health badge (`"Healthy"`)
+  - `success.data.dataStore.header.badgeStack.tags[0].text` -> Connection state (`"ONLINE"`)
+  - `success.data.dataStore.filterDetailsCard.items[1].data.adsTextStack.items[0].data.text` -> Filter note
 
-During hardware and network packet analysis, we verified the complete internal architecture of the Native M2 purifier:
-
-### 1. The Microcontroller
-* **Chip:** **Espressif ESP8266** running **IoTfy Embedded C++ SDK (v10)** (`User-Agent: ESP8266HTTPClient`).
-* **MAC Prefix:** `34:AB:95:xx:xx:xx`.
-* **Zero Local Ports:** The ESP8266 has **no open listening ports** (no local web server on port 80, 8080, or 443). Querying its local IP directly (`192.168.x.x`) times out or drops packets.
-
-### 2. The Cloud Protocol & Security
-* **Time Sync:** Upon boot, it performs an unencrypted HTTP call to `iace.iotfy.com/t/getTimeMs` on port 80 (hosted on Google App Engine) to sync internal epoch time.
-* **Telemetry Connection:** It connects outbound to **AWS IoT Core** (Mumbai region) at `*.iot.ap-south-1.amazonaws.com:8883`.
-* **Mutual TLS (mTLS):** The connection strictly enforces **mTLS**. The ESP8266 has an official **X.509 client certificate and private key burned into flash memory** (valid through 2049) signed by Amazon Web Services.
-* **Why "Fake Cloud" / DNS Spoofing Fails:** If you redirect the domain to a local Mosquitto MQTT broker on a Raspberry Pi or router, the ESP8266 strictly verifies Amazon's Root CA. It rejects custom/self-signed certificates during the TLS handshake and immediately aborts the connection.
-
-### 3. The Android App SSL Restriction
-If you attempt to proxy the official mobile app using tools like `mitmproxy`, Android 7+ enforces **Network Security Config**, which ignores user-installed CA certificates by default (`Client TLS handshake failed: certificate unknown`).
-
-### Conclusion
-**The desktop web API endpoint is the cleanest, easiest path.** It requires no physical soldering, avoids proxy/certificate hassles, doesn't void your 2-year warranty, and gives full real-time telemetry.
+### 2. Water Consumption History
+* **URL:** `POST https://www.urbanclap.com/api/v2/supply/appliances/getWaterConsumptionData`
+* **Payload:** `{"city_key": null, "applianceId": "<id>", "timeStampOfLastDayInWeek": <timestamp_ms>}`
+* **Key Response Paths:**
+  - `success.data.historicWaterConsumptionData[0].average` -> Average daily litres
+  - `success.data.historicWaterConsumptionData[0].dailyData` -> Array of `{"dateText": "Nov 13", "value": 3}`
 
 ---
 
-## Disclaimer
+## Troubleshooting & Token Renewal
+
+### How Long Does the Token Last?
+Urban Company session tokens (`Bearer ...`) are long-lived (typically valid for **several months to a year**), provided you do not manually click "Log Out" in that browser session.
+
+### What Happens When It Expires?
+If the token expires, the client and Home Assistant will receive an `HTTP 401 Unauthorized` or `403 Forbidden`. The Python script will output:
+```text
+[AUTH ERROR] Authorization token has expired or is invalid. 
+Please re-capture your Bearer token and update config.json.
+```
+To renew: open `urbancompany.com`, press `F12`, log in via OTP, and copy the new `Bearer` string into `config.json` or your Home Assistant `configuration.yaml`.
+
+---
+
+## Legal Disclaimer & License
 
 This is an independent, community-driven open-source project created strictly for personal home automation and interoperability. It is not affiliated with, endorsed by, or sponsored by Urban Company (UrbanClap Technologies Pvt. Ltd.). All product names, trademarks, and registered trademarks belong to their respective holders.
 
----
-
-## License
-
-[MIT License](LICENSE)
+Distributed under the [MIT License](LICENSE).
