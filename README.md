@@ -131,7 +131,7 @@ When the purifier boots up:
 
 1. Clone or download this repository:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/native-m2-monitor.git
+   git clone https://github.com/Saikumarmohan/native-m2-monitor.git
    cd native-m2-monitor
    ```
 2. Copy the template:
